@@ -1,0 +1,239 @@
+"use client"
+
+import { useMemo, useRef, useCallback, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { TileCard, type TextBlock } from "@/components/tile-card"
+import { Sparkles, CheckSquare, Clock } from "lucide-react"
+import { CONTENT_TYPE_CONFIG, type ContentType } from "@/lib/content-types"
+import { getRelatedIds } from "@/lib/utils"
+import { KanbanMinimap } from "./kanban-minimap"
+
+interface KanbanAreaProps {
+  blocks: TextBlock[]
+  onDelete: (id: string) => void
+  onEdit: (id: string, newText: string) => void
+  onEditAnnotation: (id: string, newAnnotation: string) => void
+  onReEnrich: (id: string, newCategory?: string) => void
+  onToggleCollapse: (id: string) => void
+  onTogglePin: (id: string) => void
+  onToggleSubTask: (id: string, subTaskId: string) => void
+  onDeleteSubTask: (id: string, subTaskId: string) => void
+  collapsedIds: Set<string>
+  hasApiKey: boolean
+  onOpenSidebar: () => void
+}
+
+export function KanbanArea({
+  blocks,
+  onDelete,
+  onEdit,
+  onEditAnnotation,
+  onReEnrich,
+  onToggleCollapse,
+  onTogglePin,
+  onToggleSubTask,
+  onDeleteSubTask,
+  collapsedIds,
+  hasApiKey,
+  onOpenSidebar
+}: KanbanAreaProps) {
+  const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null)
+  const [lockedConnectionId, setLockedConnectionId] = useState<string | null>(null)
+
+  const activeConnectionId = lockedConnectionId ?? hoveredConnectionId
+
+  const relatedIds = useMemo<Set<string>>(
+    () => activeConnectionId ? getRelatedIds(activeConnectionId, blocks) : new Set(),
+    [activeConnectionId, blocks]
+  )
+
+  const handleConnectionHover = useCallback((id: string | null) => {
+    setHoveredConnectionId(id)
+  }, [])
+
+  const handleConnectionLock = useCallback((id: string) => {
+    setLockedConnectionId(prev => prev === id ? null : id)
+  }, [])
+
+  // Group blocks into columns by ContentType
+  const columns = useMemo(() => {
+    const cols: Record<string, { title: string; icon: any; blocks: TextBlock[] }> = {
+      processing: { title: "Enriching", icon: Clock, blocks: [] },
+      task: { title: "Tasks", icon: CheckSquare, blocks: [] },
+      thesis: { title: "Thesis", icon: Sparkles, blocks: [] }
+    }
+
+    blocks.forEach(block => {
+      if (block.isEnriching) {
+        cols.processing.blocks.push(block)
+      } else {
+        const type = block.contentType || "general"
+        if (!cols[type]) {
+          const config = CONTENT_TYPE_CONFIG[type as ContentType] || CONTENT_TYPE_CONFIG.general
+          cols[type] = { title: config.label, icon: config.icon, blocks: [] }
+        }
+        cols[type].blocks.push(block)
+      }
+    })
+
+    return Object.entries(cols)
+      .filter(([_, col]) => col.blocks.length > 0)
+      .sort(([keyA], [keyB]) => {
+        // Priority: task > thesis > processing > rest
+        const order = ["task", "thesis", "processing"]
+        const idxA = order.indexOf(keyA)
+        const idxB = order.indexOf(keyB)
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB
+        if (idxA !== -1) return -1
+        if (idxB !== -1) return 1
+        return keyA.localeCompare(keyB)
+      })
+  }, [blocks])
+
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const scrollToColumn = useCallback((key: string) => {
+    const el = document.getElementById(`kanban-col-${key}`)
+    if (el && containerRef.current) {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
+    }
+  }, [])
+
+  const minimapColumns = useMemo(() => {
+    return columns.map(([key, col]) => ({
+      id: key,
+      title: col.title,
+      icon: col.icon,
+      count: col.blocks.length
+    }))
+  }, [columns])
+
+  return (
+    <div className="relative h-full w-full bg-[#050505] overflow-hidden">
+      {/* Scrollable Container */}
+      <div 
+        ref={containerRef}
+        className="flex h-full w-full overflow-x-auto custom-scrollbar p-6 pb-6 gap-8"
+      >
+        <AnimatePresence mode="popLayout">
+          {columns.map(([key, col]) => (
+            <motion.div
+              key={key}
+              id={`kanban-col-${key}`}
+              layout
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col w-80 shrink-0 h-full max-h-full pb-2"
+            >
+              {/* Column Header */}
+              <div className="flex items-center justify-between px-2 py-1 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <col.icon className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-foreground/70">
+                    {col.title}
+                  </h3>
+                </div>
+                <span className="font-mono text-[9px] text-muted-foreground/40 font-bold">
+                  {col.blocks.length}
+                </span>
+              </div>
+
+              {/* Column Content */}
+              <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1 pb-4">
+                {col.blocks.map(block => {
+                  const collapsed = collapsedIds.has(block.id)
+                  return (
+                    <div
+                      key={block.id}
+                      className={`shrink-0 transition-[height,opacity,filter] duration-300 ${collapsed ? 'h-[38px]' : ''} ${activeConnectionId && !relatedIds.has(block.id) ? 'opacity-15 saturate-0' : 'opacity-100'}`}
+                    >
+                      <TileCard
+                        block={block}
+                        isCollapsed={collapsed}
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                        onEditAnnotation={onEditAnnotation}
+                        onReEnrich={onReEnrich}
+                        onToggleCollapse={onToggleCollapse}
+                        onTogglePin={onTogglePin}
+                        onToggleSubTask={onToggleSubTask}
+                        onDeleteSubTask={onDeleteSubTask}
+                        onConnectionHover={handleConnectionHover}
+                        onConnectionLock={handleConnectionLock}
+                        isConnectionLocked={lockedConnectionId === block.id}
+                        allBlocks={blocks}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        
+        {blocks.length === 0 && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-10 w-[320px]">
+              <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">type-grouped board view</p>
+
+              <div className="flex flex-col gap-4 w-full">
+                {([
+                  { color: "var(--type-task)",     label: "tasks",     hint: "anything action-oriented" },
+                  { color: "var(--type-claim)",    label: "claims",    hint: "assertions the AI annotates + scores" },
+                  { color: "var(--type-question)", label: "questions", hint: "open threads and unknowns" },
+                  { color: "var(--type-idea)",     label: "ideas",     hint: "raw concepts and hunches" },
+                ] as const).map(({ color, label, hint }) => (
+                  <div key={label} className="flex items-center gap-3">
+                    <div className="w-0.5 h-8 rounded-full shrink-0" style={{ background: color }} />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-mono text-[9px] uppercase tracking-[0.15em]" style={{ color }}>{label}</span>
+                      <p className="font-mono text-[10px] text-foreground/55">{hint}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {!hasApiKey && (
+                <div className="flex flex-col gap-2 rounded-sm border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5">
+                  <p className="font-mono text-[9px] text-amber-400/80 leading-relaxed">
+                    AI enrichment is inactive — no OpenRouter API key configured.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={onOpenSidebar}
+                      className="font-mono text-[9px] text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
+                    >
+                      Open Settings →
+                    </button>
+                    <span className="font-mono text-[8px] text-amber-500/40">or</span>
+                    <a
+                      href="https://openrouter.ai/settings/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[9px] text-amber-500/60 hover:text-amber-400 transition-colors"
+                    >
+                      Get a key ↗
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <p className="font-mono text-[9px] text-foreground/30 uppercase tracking-[0.2em] text-center">
+                type anything · #type to classify · ⌘K for commands
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Minimap Overlay (Fixed Positioning within relative container) */}
+      <div className="absolute bottom-6 right-8 z-30">
+        <KanbanMinimap 
+          columns={minimapColumns}
+          onColumnClick={scrollToColumn}
+        />
+      </div>
+    </div>
+  )
+}
