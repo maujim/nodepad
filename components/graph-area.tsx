@@ -411,13 +411,13 @@ export function GraphArea({
                     <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5" style={{ background: color }} />
                     <div className="flex flex-col gap-1">
                       <span className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color }}>{label}</span>
-                      <p className="font-mono text-[13px] leading-snug text-white">{text}</p>
+                      <p className="text-[14px] leading-snug text-foreground/50">{text}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <p className="font-mono text-[11px] text-white/30 uppercase tracking-[0.15em] whitespace-nowrap">
+              <p className="text-[13px] text-white uppercase tracking-[0.15em] whitespace-nowrap">
                 type anything · #type to classify · ⌘K for commands
               </p>
             </div>

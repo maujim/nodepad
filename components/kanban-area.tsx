@@ -171,60 +171,62 @@ export function KanbanArea({
           ))}
         </AnimatePresence>
         
-        {blocks.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-8 w-[420px]">
-              <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-foreground/35">type-grouped board view</p>
+      </div>
 
-              <div className="flex flex-col gap-5 w-full">
-                {([
-                  { color: "var(--type-task)",     label: "task",     hint: "Review papers on distributed consensus" },
-                  { color: "var(--type-claim)",    label: "claim",    hint: "Caffeine improves short-term recall by ~15%" },
-                  { color: "var(--type-question)", label: "question", hint: "Does creativity require periods of solitude?" },
-                  { color: "var(--type-idea)",     label: "idea",     hint: "What if collaboration refines, not generates, original thought?" },
-                ] as const).map(({ color, label, hint }) => (
-                  <div key={label} className="flex items-start gap-4">
-                    <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5" style={{ background: color }} />
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color }}>{label}</span>
-                      <p className="font-mono text-[13px] leading-snug text-white">{hint}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* Empty state — absolutely positioned so it centers identically across all views */}
+      {blocks.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-8 w-[420px]">
+            <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-foreground/35">type-grouped board view</p>
 
-              {!hasApiKey && (
-                <div className="flex flex-col gap-2 rounded-sm border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 w-full">
-                  <p className="font-mono text-[9px] text-amber-400/80 leading-relaxed">
-                    AI enrichment is inactive — no OpenRouter API key configured.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={onOpenSidebar}
-                      className="font-mono text-[9px] text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
-                    >
-                      Open Settings →
-                    </button>
-                    <span className="font-mono text-[8px] text-amber-500/40">or</span>
-                    <a
-                      href="https://openrouter.ai/settings/keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-[9px] text-amber-500/60 hover:text-amber-400 transition-colors"
-                    >
-                      Get a key ↗
-                    </a>
+            <div className="flex flex-col gap-5 w-full">
+              {([
+                { color: "var(--type-task)",     label: "task",     hint: "Review papers on distributed consensus" },
+                { color: "var(--type-claim)",    label: "claim",    hint: "Caffeine improves short-term recall by ~15%" },
+                { color: "var(--type-question)", label: "question", hint: "Does creativity require periods of solitude?" },
+                { color: "var(--type-idea)",     label: "idea",     hint: "What if collaboration refines, not generates, original thought?" },
+              ] as const).map(({ color, label, hint }) => (
+                <div key={label} className="flex items-start gap-4">
+                  <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5" style={{ background: color }} />
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color }}>{label}</span>
+                    <p className="text-[14px] leading-snug text-foreground/50">{hint}</p>
                   </div>
                 </div>
-              )}
-
-              <p className="font-mono text-[11px] text-white/30 uppercase tracking-[0.15em] whitespace-nowrap">
-                type anything · #type to classify · ⌘K for commands
-              </p>
+              ))}
             </div>
+
+            {!hasApiKey && (
+              <div className="flex flex-col gap-2 rounded-sm border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 w-full pointer-events-auto">
+                <p className="font-mono text-[9px] text-amber-400/80 leading-relaxed">
+                  AI enrichment is inactive — no OpenRouter API key configured.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onOpenSidebar}
+                    className="font-mono text-[9px] text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
+                  >
+                    Open Settings →
+                  </button>
+                  <span className="font-mono text-[8px] text-amber-500/40">or</span>
+                  <a
+                    href="https://openrouter.ai/settings/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[9px] text-amber-500/60 hover:text-amber-400 transition-colors"
+                  >
+                    Get a key ↗
+                  </a>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[13px] text-white uppercase tracking-[0.15em] whitespace-nowrap">
+              type anything · #type to classify · ⌘K for commands
+            </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Minimap Overlay (Fixed Positioning within relative container) */}
       <div className="absolute bottom-6 right-8 z-30">

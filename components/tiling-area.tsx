@@ -266,82 +266,80 @@ export function TilingArea({
           if (e.target === e.currentTarget) setLockedConnectionId(null)
         }}
       >
-        {pageTrees.length > 0 ? (
-          <>
-            <div className="flex flex-col w-full">
-              {pageTrees.map((tree, idx) => {
-                const count = chunkedPages[idx].length
-                // Elastic height: if only 1 tile, don't take a whole screen
-                const heightClass = count <= 2 ? 'h-[300px]' : count <= 4 ? 'h-[60vh]' : 'h-screen'
-                return (
-                  <div
-                    key={idx}
-                    data-page-idx={idx}
-                    className={`flex w-full ${heightClass} border-b border-white/5 last:border-0`}
-                  >
-                    <TileRenderer node={tree} pageBlocks={chunkedPages[idx]} />
-                  </div>
-                )
-              })}
-            </div>
-
-          </>
-        ) : (
-          !taskBlock && (
-            <div className="flex h-[80vh] w-full items-center justify-center">
-              <div className="flex flex-col items-center gap-8 w-[420px]">
-                <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-foreground/35">spatial research workspace</p>
-
-                <div className="flex flex-col gap-5 w-full">
-                  {([
-                    { color: "var(--type-question)", label: "question", text: "Does consciousness require a period of genuine solitude?" },
-                    { color: "var(--type-claim)",    label: "claim",    text: "Caffeine improves short-term recall by ~15%" },
-                    { color: "var(--type-quote)",    label: "quote",    text: "Attention is the rarest form of generosity — Simone Weil" },
-                    { color: "var(--type-task)",     label: "task",     text: "Review papers on distributed consensus" },
-                  ] as const).map(({ color, label, text }) => (
-                    <div key={label} className="flex items-start gap-4">
-                      <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5" style={{ background: color }} />
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color }}>{label}</span>
-                        <p className="font-mono text-[13px] leading-snug text-white">{text}</p>
-                      </div>
-                    </div>
-                  ))}
+        {pageTrees.length > 0 && (
+          <div className="flex flex-col w-full">
+            {pageTrees.map((tree, idx) => {
+              const count = chunkedPages[idx].length
+              // Elastic height: if only 1 tile, don't take a whole screen
+              const heightClass = count <= 2 ? 'h-[300px]' : count <= 4 ? 'h-[60vh]' : 'h-screen'
+              return (
+                <div
+                  key={idx}
+                  data-page-idx={idx}
+                  className={`flex w-full ${heightClass} border-b border-white/5 last:border-0`}
+                >
+                  <TileRenderer node={tree} pageBlocks={chunkedPages[idx]} />
                 </div>
-
-                {!hasApiKey && (
-                  <div className="flex flex-col gap-2 rounded-sm border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 w-full">
-                    <p className="font-mono text-[9px] text-amber-400/80 leading-relaxed">
-                      AI enrichment is inactive — no OpenRouter API key configured.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={onOpenSidebar}
-                        className="font-mono text-[9px] text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
-                      >
-                        Open Settings →
-                      </button>
-                      <span className="font-mono text-[8px] text-amber-500/40">or</span>
-                      <a
-                        href="https://openrouter.ai/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-[9px] text-amber-500/60 hover:text-amber-400 transition-colors"
-                      >
-                        Get a key ↗
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                <p className="font-mono text-[11px] text-white/30 uppercase tracking-[0.15em] whitespace-nowrap">
-                  type anything · #type to classify · ⌘K for commands
-                </p>
-              </div>
-            </div>
-          )
+              )
+            })}
+          </div>
         )}
       </div>
+
+      {/* Empty state — absolutely positioned so it centers identically across all views */}
+      {pageTrees.length === 0 && !taskBlock && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-8 w-[420px]">
+            <p className="font-mono text-[10px] uppercase tracking-[0.35em] text-foreground/35">spatial research workspace</p>
+
+            <div className="flex flex-col gap-5 w-full">
+              {([
+                { color: "var(--type-question)", label: "question", text: "Does consciousness require a period of genuine solitude?" },
+                { color: "var(--type-claim)",    label: "claim",    text: "Caffeine improves short-term recall by ~15%" },
+                { color: "var(--type-quote)",    label: "quote",    text: "Attention is the rarest form of generosity — Simone Weil" },
+                { color: "var(--type-task)",     label: "task",     text: "Review papers on distributed consensus" },
+              ] as const).map(({ color, label, text }) => (
+                <div key={label} className="flex items-start gap-4">
+                  <div className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5" style={{ background: color }} />
+                  <div className="flex flex-col gap-1">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color }}>{label}</span>
+                    <p className="text-[14px] leading-snug text-foreground/50">{text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {!hasApiKey && (
+              <div className="flex flex-col gap-2 rounded-sm border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5 w-full pointer-events-auto">
+                <p className="font-mono text-[9px] text-amber-400/80 leading-relaxed">
+                  AI enrichment is inactive — no OpenRouter API key configured.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onOpenSidebar}
+                    className="font-mono text-[9px] text-amber-300 underline underline-offset-2 hover:text-amber-200 transition-colors"
+                  >
+                    Open Settings →
+                  </button>
+                  <span className="font-mono text-[8px] text-amber-500/40">or</span>
+                  <a
+                    href="https://openrouter.ai/settings/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[9px] text-amber-500/60 hover:text-amber-400 transition-colors"
+                  >
+                    Get a key ↗
+                  </a>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[13px] text-white uppercase tracking-[0.15em] whitespace-nowrap">
+              type anything · #type to classify · ⌘K for commands
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Floating minimap — shown as soon as content overflows the visible area */}
       {isScrollable && chunkedPages.length >= 1 && (
