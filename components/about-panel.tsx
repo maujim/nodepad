@@ -132,6 +132,14 @@ export function AboutPanel({ open, onClose }: AboutPanelProps) {
                 Saleh Kayyali
               </a>
             </span>
+            <a
+              href="https://github.com/mskayyali/nodepad"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50 hover:text-foreground border border-white/10 hover:border-white/25 px-2 py-0.5 rounded-sm transition-colors"
+            >
+              Source code ↗
+            </a>
             <CopyEmailButton />
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground/35">
