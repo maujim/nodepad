@@ -119,3 +119,9 @@ Pull requests welcome. Two PRs have already shaped the project:
 ---
 
 A design experiment by [Saleh Kayyali](http://mskayyali.com).
+
+---
+
+## License
+
+[MIT](LICENSE)
