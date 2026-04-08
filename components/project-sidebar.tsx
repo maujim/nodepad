@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus,
@@ -18,13 +18,16 @@ import {
   EyeOff,
   Save,
   FolderInput,
+  Search,
 } from "lucide-react"
 import {
   AI_PROVIDER_PRESETS,
   getModelsForProvider,
   getPreset,
+  fetchOpenRouterFreeModels,
   type AISettings,
   type AIProvider,
+  type AIModel,
 } from "@/lib/ai-settings"
 
 interface Project {
@@ -73,6 +76,10 @@ export function ProjectSidebar({
   const [showKey, setShowKey] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
   const [providerOpen, setProviderOpen] = useState(false)
+  const [modelQuery, setModelQuery] = useState("")
+  const [openRouterFreeModels, setOpenRouterFreeModels] = useState<AIModel[]>([])
+  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false)
+  const [openRouterModelsError, setOpenRouterModelsError] = useState<string | null>(null)
   // local draft for settings (only save on "Save")
   const [draft, setDraft] = useState<AISettings>(aiSettings)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -113,13 +120,97 @@ export function ProjectSidebar({
       ...(draft.providerKeys ?? {}),
       [draft.provider]: draft.apiKey,
     }
-    onUpdateAISettings({ ...draft, providerKeys })
+
+    const normalizedModelId =
+      draft.provider === "openrouter" && !draft.modelId.toLowerCase().endsWith(":free")
+        ? "openrouter/free"
+        : draft.modelId
+
+    onUpdateAISettings({ ...draft, modelId: normalizedModelId, providerKeys })
     setShowSettings(false)
   }
 
   const currentPreset = getPreset(draft.provider)
-  const models = getModelsForProvider(draft.provider)
-  const selectedModel = models.find(m => m.id === draft.modelId) || models[0] || undefined
+  const staticModels = getModelsForProvider(draft.provider)
+
+  const models = useMemo(() => {
+    if (draft.provider !== "openrouter") return staticModels
+    return openRouterFreeModels.length > 0 ? openRouterFreeModels : staticModels
+  }, [draft.provider, staticModels, openRouterFreeModels])
+
+  const filteredModels = useMemo(() => {
+    if (draft.provider !== "openrouter") return models
+    const q = modelQuery.trim().toLowerCase()
+    if (!q) return models
+    return models.filter(m =>
+      m.id.toLowerCase().includes(q) ||
+      m.label.toLowerCase().includes(q) ||
+      m.shortLabel.toLowerCase().includes(q)
+    )
+  }, [draft.provider, models, modelQuery])
+
+  const selectedModel = models.find(m => m.id === draft.modelId) || (draft.modelId
+    ? {
+        id: draft.modelId,
+        label: draft.modelId,
+        shortLabel: draft.modelId.split("/").pop() || draft.modelId,
+        description: "Custom model",
+        supportsGrounding: false,
+      }
+    : undefined)
+
+  useEffect(() => {
+    setModelQuery("")
+  }, [draft.provider])
+
+  useEffect(() => {
+    if (!showSettings || draft.provider !== "openrouter") return
+
+    let cancelled = false
+    const CACHE_KEY = "nodepad-openrouter-free-models-v1"
+
+    const readCache = () => {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY)
+        if (!raw) return null
+        const parsed = JSON.parse(raw) as { ts: number; data: AIModel[] }
+        if (!parsed?.data || !Array.isArray(parsed.data)) return null
+        if (Date.now() - (parsed.ts || 0) > 12 * 60 * 60 * 1000) return null
+        return parsed.data
+      } catch {
+        return null
+      }
+    }
+
+    const writeCache = (data: AIModel[]) => {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })) } catch {}
+    }
+
+    const cached = readCache()
+    if (cached && cached.length > 0) {
+      setOpenRouterFreeModels(cached)
+    }
+
+    setLoadingOpenRouterModels(true)
+    setOpenRouterModelsError(null)
+
+    fetchOpenRouterFreeModels()
+      .then((list) => {
+        if (cancelled) return
+        setOpenRouterFreeModels(list)
+        writeCache(list)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setOpenRouterModelsError(err?.message || "Failed to load models")
+      })
+      .finally(() => {
+        if (cancelled) return
+        setLoadingOpenRouterModels(false)
+      })
+
+    return () => { cancelled = true }
+  }, [showSettings, draft.provider])
 
   return (
     <div
@@ -312,7 +403,9 @@ export function ProjectSidebar({
                                 setDraft(d => ({
                                   ...d,
                                   provider: preset.id,
-                                  modelId: newModels[0]?.id ?? d.modelId,
+                                  modelId: preset.id === "openrouter"
+                                    ? (d.modelId?.toLowerCase().endsWith(":free") ? d.modelId : "openrouter/free")
+                                    : (newModels[0]?.id ?? d.modelId),
                                   webGrounding: d.webGrounding,
                                   customBaseUrl: "",
                                   // Restore the saved key for this provider if one exists,
@@ -374,6 +467,11 @@ export function ProjectSidebar({
                   <label className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     Model
                   </label>
+                  {draft.provider === "openrouter" && (
+                    <p className="font-mono text-[8px] text-muted-foreground/70 -mt-1">
+                      Loaded from openrouter.ai/api/v1/models · showing IDs ending with :free
+                    </p>
+                  )}
                   {models.length === 0 ? (
                     <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 focus-within:border-primary/50 transition-colors">
                       <input
@@ -395,6 +493,12 @@ export function ProjectSidebar({
                         <div>
                           <div className="font-mono text-[11px] font-bold text-foreground">{selectedModel?.label ?? draft.modelId}</div>
                           <div className="font-mono text-[9px] text-muted-foreground mt-0.5">{selectedModel?.description ?? "Custom model ID"}</div>
+                          {draft.provider === "openrouter" && loadingOpenRouterModels && (
+                            <div className="font-mono text-[8px] text-primary/70 mt-0.5">Refreshing free model list…</div>
+                          )}
+                          {draft.provider === "openrouter" && openRouterModelsError && (
+                            <div className="font-mono text-[8px] text-amber-300/80 mt-0.5">{openRouterModelsError}</div>
+                          )}
                         </div>
                         <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${modelOpen ? "rotate-180" : ""}`} />
                       </button>
@@ -407,7 +511,24 @@ export function ProjectSidebar({
                             transition={{ duration: 0.1 }}
                             className="absolute top-full left-0 right-0 z-20 mt-1 overflow-hidden rounded-md border border-white/10 bg-[#0d0d10] shadow-xl"
                           >
-                            {models.map(model => (
+                            {draft.provider === "openrouter" && (
+                              <div className="px-2.5 py-2 border-b border-white/10 bg-white/[0.02]">
+                                <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1.5">
+                                  <Search className="h-3 w-3 text-muted-foreground/70" />
+                                  <input
+                                    value={modelQuery}
+                                    onChange={e => setModelQuery(e.target.value)}
+                                    placeholder="Search free models..."
+                                    className="w-full bg-transparent font-mono text-[10px] text-foreground outline-none placeholder:text-muted-foreground/50"
+                                  />
+                                </div>
+                                <p className="mt-1.5 font-mono text-[8px] text-muted-foreground/60">
+                                  OpenRouter free models ({models.length})
+                                </p>
+                              </div>
+                            )}
+
+                            {filteredModels.map(model => (
                               <button
                                 key={model.id}
                                 onClick={() => {
@@ -428,6 +549,12 @@ export function ProjectSidebar({
                                 {model.supportsGrounding && (draft.provider === "openrouter" || draft.provider === "openai") && <Globe className="ml-auto h-3 w-3 shrink-0 text-primary/50" />}
                               </button>
                             ))}
+
+                            {filteredModels.length === 0 && (
+                              <div className="px-2.5 py-3 font-mono text-[9px] text-muted-foreground/70">
+                                No free models match your search.
+                              </div>
+                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>

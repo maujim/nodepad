@@ -58,41 +58,6 @@ export const AI_MODELS: AIModel[] = [
     description: "Default free-tier model routing via OpenRouter",
     supportsGrounding: false,
   },
-  {
-    id: "anthropic/claude-sonnet-4-5",
-    label: "Claude Sonnet 4.5",
-    shortLabel: "Claude",
-    description: "Best reasoning & annotation quality",
-    supportsGrounding: false,
-  },
-  {
-    id: "openai/gpt-4o",
-    label: "GPT-4o",
-    shortLabel: "GPT-4o",
-    description: "Strong structured output, broad knowledge",
-    supportsGrounding: true,
-  },
-  {
-    id: "google/gemini-2.5-pro-preview-03-25",
-    label: "Gemini 2.5 Pro",
-    shortLabel: "Gemini",
-    description: "Long-context, web grounding available",
-    supportsGrounding: true,
-  },
-  {
-    id: "deepseek/deepseek-chat",
-    label: "DeepSeek V3",
-    shortLabel: "DeepSeek",
-    description: "Cost-efficient frontier model",
-    supportsGrounding: false,
-  },
-  {
-    id: "mistralai/mistral-small-3.2-24b-instruct",
-    label: "Mistral Small 3.2",
-    shortLabel: "Mistral",
-    description: "Fast, excellent structured outputs",
-    supportsGrounding: false,
-  },
 ]
 
 export const OPENAI_MODELS: AIModel[] = [
@@ -169,7 +134,43 @@ export const ZAI_MODELS: AIModel[] = [
 export function getModelsForProvider(provider: AIProvider): AIModel[] {
   if (provider === "openai") return OPENAI_MODELS
   if (provider === "zai")    return ZAI_MODELS
-  return AI_MODELS // openrouter + safe fallback for any stale localStorage value
+  return AI_MODELS // OpenRouter uses dynamic free-model discovery in the UI
+}
+
+export interface OpenRouterModelResponse {
+  data?: Array<{ id?: string; name?: string }>
+}
+
+/**
+ * Fetches OpenRouter models and keeps only free-tier IDs.
+ * Equivalent to: for model in response.data: if model.id endswith(':free'): keep it
+ */
+export async function fetchOpenRouterFreeModels(): Promise<AIModel[]> {
+  const res = await fetch("https://openrouter.ai/api/v1/models")
+  if (!res.ok) {
+    throw new Error(`OpenRouter models fetch failed (${res.status})`)
+  }
+
+  const json = await res.json() as OpenRouterModelResponse
+  const rows = Array.isArray(json.data) ? json.data : []
+
+  const mapped = rows
+    .filter((m) => typeof m.id === "string" && m.id.toLowerCase().endsWith(":free"))
+    .map((m): AIModel => {
+      const id = m.id as string
+      const short = id.split("/").pop() || id
+      return {
+        id,
+        label: m.name || id,
+        shortLabel: short,
+        description: "OpenRouter free model",
+        supportsGrounding: false,
+      }
+    })
+
+  // Stable order for consistent UX
+  mapped.sort((a, b) => a.id.localeCompare(b.id))
+  return mapped
 }
 
 export const DEFAULT_MODEL_ID = "openrouter/free"
@@ -211,18 +212,28 @@ export interface AIConfig {
 export function loadAIConfig(): AIConfig | null {
   const s = loadSettings()
   if (!s.apiKey) return null
+
+  // OpenRouter models are discovered dynamically in the client UI.
+  // Keep the saved model ID verbatim so dynamic free-model IDs work.
+  if (s.provider === "openrouter") {
+    const modelId = s.modelId?.toLowerCase().endsWith(":free") ? s.modelId : DEFAULT_MODEL_ID
+    return {
+      apiKey: s.apiKey,
+      modelId,
+      supportsGrounding: false,
+      provider: s.provider,
+      customBaseUrl: s.customBaseUrl,
+    }
+  }
+
   const models = getModelsForProvider(s.provider)
   const model = models.find(m => m.id === s.modelId)
-  // Use the matched model's id if found; otherwise fall back to the first model
-  // for this provider.  This handles the case where localStorage still holds an
-  // OpenRouter-prefixed id (e.g. "openai/gpt-4o") after switching to OpenAI —
-  // that string won't match any entry in OPENAI_MODELS so we fall back to "gpt-4o".
   const modelId = model?.id ?? models[0]?.id ?? s.modelId ?? DEFAULT_MODEL_ID
-  // Z.ai does not support grounding; only openrouter and openai do
   const supportsGrounding =
-    (s.provider === "openrouter" || s.provider === "openai") &&
+    s.provider === "openai" &&
     s.webGrounding &&
     (model?.supportsGrounding ?? false)
+
   return { apiKey: s.apiKey, modelId, supportsGrounding, provider: s.provider, customBaseUrl: s.customBaseUrl }
 }
 
