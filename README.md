@@ -52,7 +52,8 @@ Access to all major models through a single key. Free credits available at [open
 
 | Model | Notes |
 |---|---|
-| `openai/gpt-4o` | Default. Strong annotation quality, web grounding. |
+| `openrouter/free` | Default. OpenRouter free-tier model routing. |
+| `openai/gpt-4o` | Strong annotation quality, web grounding. |
 | `anthropic/claude-sonnet-4-5` | Strong reasoning, complex research. |
 | `google/gemini-2.5-pro` | Long context, web grounding. |
 | `deepseek/deepseek-chat` | Fast, cost-effective. |

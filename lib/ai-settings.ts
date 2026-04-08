@@ -52,6 +52,13 @@ export function getPreset(provider: AIProvider): AIProviderPreset {
 
 export const AI_MODELS: AIModel[] = [
   {
+    id: "openrouter/free",
+    label: "OpenRouter Free",
+    shortLabel: "Free",
+    description: "Default free-tier model routing via OpenRouter",
+    supportsGrounding: false,
+  },
+  {
     id: "anthropic/claude-sonnet-4-5",
     label: "Claude Sonnet 4.5",
     shortLabel: "Claude",
@@ -165,7 +172,7 @@ export function getModelsForProvider(provider: AIProvider): AIModel[] {
   return AI_MODELS // openrouter + safe fallback for any stale localStorage value
 }
 
-export const DEFAULT_MODEL_ID = "openai/gpt-4o"
+export const DEFAULT_MODEL_ID = "openrouter/free"
 export const DEFAULT_PROVIDER: AIProvider = "openrouter"
 
 export interface AISettings {
