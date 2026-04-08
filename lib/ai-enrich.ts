@@ -173,14 +173,21 @@ function extractJsonCandidate(content: string): string | null {
   return null
 }
 
-function coerceLooseEnrichResult(content: string): EnrichResult | null {
-  // Last-resort regex extraction for truncated responses
+function coerceLooseEnrichResult(
+  content: string,
+  fallbackType: ContentType = "general",
+  fallbackCategory = "general",
+): EnrichResult | null {
+  // Last-resort regex extraction for truncated or partially-invalid JSON.
   const contentTypeMatch = content.match(/"contentType"\s*:\s*"([^"]+)"/)
   const categoryMatch    = content.match(/"category"\s*:\s*"([^"]+)"/)
-  const annotationMatch  = content.match(
-    /"annotation"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:confidence|influencedByIndices|isUnrelated|mergeWithIndex)"|\s*$)/
-  )
-  if (!contentTypeMatch || !categoryMatch || !annotationMatch) return null
+  const annotationMatch  =
+    content.match(/"annotation"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:confidence|influencedByIndices|isUnrelated|mergeWithIndex|contentType|category)"|\s*$)/)
+    // If the string is cut mid-quote, still salvage everything after "annotation": "..."
+    ?? content.match(/"annotation"\s*:\s*"([\s\S]*)$/)
+
+  // If we couldn't even salvage annotation text, parsing truly failed.
+  if (!annotationMatch) return null
 
   const confidenceRaw    = content.match(/"confidence"\s*:\s*(null|-?\d+(?:\.\d+)?)/)?.[1]
   const influencedRaw    = content.match(/"influencedByIndices"\s*:\s*\[([^\]]*)\]/)?.[1]
@@ -191,10 +198,20 @@ function coerceLooseEnrichResult(content: string): EnrichResult | null {
     ? influencedRaw.split(",").map(p => Number(p.trim())).filter(Number.isFinite)
     : []
 
+  const rawType = (contentTypeMatch?.[1] || fallbackType).toLowerCase()
+  const allowedTypes: ContentType[] = [
+    "entity", "claim", "question", "task", "idea", "reference", "quote",
+    "definition", "opinion", "reflection", "narrative", "comparison", "general", "thesis",
+  ]
+  const safeType = (allowedTypes.includes(rawType as ContentType) ? rawType : fallbackType) as ContentType
+
+  const safeCategory = decodeJsonishString(categoryMatch?.[1] || fallbackCategory || "general")
+  const safeAnnotation = decodeJsonishString(annotationMatch[1]).replace(/",?\s*$/, "").trim()
+
   return {
-    contentType:         contentTypeMatch[1] as ContentType,
-    category:            decodeJsonishString(categoryMatch[1]),
-    annotation:          decodeJsonishString(annotationMatch[1]),
+    contentType:         safeType,
+    category:            safeCategory || "general",
+    annotation:          safeAnnotation,
     confidence:          confidenceRaw == null || confidenceRaw === "null" ? null : Number(confidenceRaw),
     influencedByIndices,
     isUnrelated:         isUnrelatedRaw === "true",
@@ -202,12 +219,50 @@ function coerceLooseEnrichResult(content: string): EnrichResult | null {
   }
 }
 
-function parseEnrichResult(content: string): EnrichResult | null {
+function normalizeEnrichResult(
+  parsed: Partial<EnrichResult> | null,
+  fallbackType: ContentType,
+  fallbackCategory?: string,
+): EnrichResult | null {
+  if (!parsed) return null
+
+  const allowedTypes: ContentType[] = [
+    "entity", "claim", "question", "task", "idea", "reference", "quote",
+    "definition", "opinion", "reflection", "narrative", "comparison", "general", "thesis",
+  ]
+
+  const rawType = (parsed.contentType as string | undefined)?.toLowerCase() || fallbackType
+  const contentType = (allowedTypes.includes(rawType as ContentType) ? rawType : fallbackType) as ContentType
+
+  const annotation = typeof parsed.annotation === "string" ? parsed.annotation.trim() : ""
+  if (!annotation) return null
+
+  return {
+    contentType,
+    category: (typeof parsed.category === "string" && parsed.category.trim())
+      ? parsed.category.trim()
+      : (fallbackCategory || "general"),
+    annotation,
+    confidence: typeof parsed.confidence === "number" ? parsed.confidence : null,
+    influencedByIndices: Array.isArray(parsed.influencedByIndices)
+      ? parsed.influencedByIndices.map(Number).filter(Number.isFinite)
+      : [],
+    isUnrelated: parsed.isUnrelated === true,
+    mergeWithIndex: typeof parsed.mergeWithIndex === "number" ? parsed.mergeWithIndex : null,
+  }
+}
+
+function parseEnrichResult(
+  content: string,
+  fallbackType: ContentType,
+  fallbackCategory?: string,
+): EnrichResult | null {
   const candidate = extractJsonCandidate(content) ?? content.trim()
   try {
-    return JSON.parse(candidate) as EnrichResult
+    const parsed = JSON.parse(candidate) as Partial<EnrichResult>
+    return normalizeEnrichResult(parsed, fallbackType, fallbackCategory)
   } catch {
-    return coerceLooseEnrichResult(candidate)
+    return coerceLooseEnrichResult(candidate, fallbackType, fallbackCategory || "general")
   }
 }
 
@@ -341,7 +396,8 @@ You have live web access. For this note type, include 1–2 real source citation
   const content = (data.choices as Array<{ message?: { content?: string } }>)?.[0]?.message?.content
   if (!content) throw new Error("No content in AI response")
 
-  const result = parseEnrichResult(content)
+  const fallbackType = (forcedType || effectiveType || "general") as ContentType
+  const result = parseEnrichResult(content, fallbackType, category)
   if (!result) {
     const finishReason = (data.choices as Array<{ finish_reason?: string }>)?.[0]?.finish_reason
     throw new Error(
